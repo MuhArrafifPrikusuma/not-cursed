@@ -15,7 +15,7 @@ pub fn main(init: std.process.Init) !void {
         const char = try stdin.peekByte();
         try nc.Modes.waitKeyPress(stdin);
 
-        std.debug.print("{c}\n", .{char});
+        std.debug.print("{c}", .{char});
         if (char == 'q') {
             try nc.Modes.wellDone();
             break;

@@ -1,9 +1,19 @@
 //! manipulate terminal modes
 const std = @import("std");
 const root = @import("root.zig");
+const sig = @import("signal.zig");
 
 /// enable raw terminal mode
 pub fn raw() !void {
+    const sa: std.posix.Sigaction = .{
+        .handler = .{ .handler = sig.sigExit },
+        .mask = std.posix.sigemptyset(),
+        .flags = std.posix.SA.RESTART,
+    };
+
+    std.posix.sigaction(std.posix.SIG.TERM, &sa, null);
+    std.posix.sigaction(std.posix.SIG.INT, &sa, null);
+
     root.termios.fd = std.Io.File.stdin().handle;
 
     root.termios.orig_termios = try std.posix.tcgetattr(root.termios.fd);
@@ -11,8 +21,10 @@ pub fn raw() !void {
     var raw_mode = root.termios.orig_termios;
     raw_mode.lflag.ECHO = false;
     raw_mode.lflag.ICANON = false;
+    raw_mode.lflag.ECHOE = false;
 
     try std.posix.tcsetattr(root.termios.fd, .FLUSH, raw_mode);
+
     root.termios.current_termios = raw_mode;
 }
 

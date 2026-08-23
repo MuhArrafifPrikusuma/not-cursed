@@ -108,11 +108,11 @@ pub fn refresh(io: Io) !void {
 
 /// handle window resizing automatically or pass your own function to handle it
 fn handleResize(func: switch (builtin.os.tag) {
-    .linux, .macos => ?*const fn (posix.SIG) callconv(.c) void,
+    .linux => ?*const fn (posix.SIG) callconv(.c) void,
     else => @compileError("unsupported\n"),
 }) void {
     switch (builtin.os.tag) {
-        .linux, .macos => {
+        .linux => {
             const sa: posix.Sigaction = .{
                 .handler = .{ .handler = if (func) |fun| fun else Sig.sigWinCh },
                 .mask = posix.sigemptyset(),
@@ -133,7 +133,7 @@ pub fn autoResize() void {
 pub fn getWinSize() void {
     const out_fd = Io.File.stdout().handle;
     switch (builtin.os.tag) {
-        .linux, .macos => {
+        .linux => {
             var size: posix.winsize = .{
                 .col = 0,
                 .row = 0,

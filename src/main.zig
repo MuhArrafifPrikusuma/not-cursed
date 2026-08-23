@@ -20,12 +20,12 @@ pub fn main(init: std.process.Init) !void {
     try nc.Modes.raw();
     std.debug.print("entering raw mode\n", .{});
 
-    try nc.Modes.setClean(io);
-    nc.mvaddch(100, 50, ' ', 7, 20);
+    nc.mvaddch(100, 50, '@', 7, 0);
     try nc.refresh(io);
 
     try nc.Cursor.home(io);
     while (true) {
+        nc.autoResize();
         const char = try stdin.peekByte();
         nc.Modes.waitKeyPress(stdin) catch continue;
 

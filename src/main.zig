@@ -38,15 +38,11 @@ pub fn main(init: std.process.Init) !void {
     try nc.Modes.setClean(io);
     try nc.refresh(io);
 
-    switch (builtin.os.tag) {
-        .macos => return,
-        .linux => {},
-        else => @compileError("unsupported"),
-    }
-
     try nc.Cursor.home(io);
     while (true) {
         nc.autoResize();
+        if (builtin.os.tag == .macos) break;
+
         const char = try stdin.peekByte();
         nc.Modes.waitKeyPress(stdin) catch continue;
 

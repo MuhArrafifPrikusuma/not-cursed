@@ -14,9 +14,7 @@ pub fn sigExit(sig: std.posix.SIG) callconv(.c) void {
     }
 }
 
-var window_resized: std.atomic.Value(bool) = .init(false);
-
 pub fn sigWinCh(_: std.posix.SIG) callconv(.c) void {
     std.debug.print("test\n", .{});
-    window_resized.store(true, .monotonic);
+    root.window_resized.store(true, .monotonic);
 }

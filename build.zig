@@ -20,6 +20,9 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
+    if (target.result.os.tag.isDarwin()) {
+        exe.root_module.link_libc = true;
+    }
 
     b.installArtifact(exe);
 

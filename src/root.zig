@@ -16,7 +16,7 @@ const Cell = struct {
     bg_color: i32,
 };
 
-const cursed = struct {
+const Cursed = struct {
     rows: i32,
     cols: i32,
     virt_scr: []Cell,
@@ -37,7 +37,7 @@ pub var termios: struct {
 
 pub var terminal: struct {
     winsize: posix.winsize = undefined,
-    screen: cursed = undefined,
+    screen: Cursed = undefined,
 } = .{};
 
 /// NOTE: later on use terminal size for this one
@@ -50,12 +50,14 @@ pub fn init() !void {
     terminal.screen.rows = terminal.winsize.row;
     terminal.screen.cols = terminal.winsize.col;
 
-    const total_cells: usize = @intCast(terminal.winsize.row * terminal.winsize.col);
+    const total_cells: usize = @intCast(terminal.winsize.row * terminal.winsize.col + terminal.winsize.col);
     terminal.screen.virt_scr = try allocator.alloc(Cell, total_cells);
     terminal.screen.physc_scr = try allocator.alloc(Cell, total_cells);
+    std.debug.print("total cell: {d}\n", .{total_cells});
+    std.debug.print("virt size: {d}\nphysical_size: {d}\n", .{ terminal.screen.virt_scr.len, terminal.screen.physc_scr.len });
 
     var i: usize = 0;
-    while (i < terminal.winsize.row * terminal.winsize.col) : (i += 1) {
+    while (i < total_cells) : (i += 1) {
         terminal.screen.virt_scr[i] = Cell{ .ch = ' ', .fg_color = 7, .bg_color = 0 };
         terminal.screen.physc_scr[i] = Cell{ .ch = ' ', .fg_color = 7, .bg_color = 0 };
     }
@@ -63,7 +65,7 @@ pub fn init() !void {
 
 pub fn mvaddch(rows: i32, cols: i32, char: u8, fg: i32, bg: i32) void {
     if (rows >= 0 and rows <= terminal.screen.rows and cols >= 0 and cols <= terminal.screen.cols) {
-        const idx: usize = @as(usize, @intCast(rows * terminal.screen.cols + cols));
+        const idx: usize = @as(usize, @intCast(rows * terminal.winsize.col + cols));
         terminal.screen.virt_scr[idx] = Cell{ .ch = char, .fg_color = fg, .bg_color = bg };
     }
 }
@@ -105,14 +107,21 @@ pub fn refresh(io: Io) !void {
 }
 
 /// handle window resizing automatically or pass your own function to handle it
-fn handleResize(comptime func: ?*const fn (posix.SIG) callconv(.c) void) void {
-    const sa: posix.Sigaction = .{
-        .handler = .{ .handler = if (func) |fun| fun else Sig.sigWinCh },
-        .mask = posix.sigemptyset(),
-        .flags = posix.SA.RESTART,
-    };
+fn handleResize(func: switch (builtin.os.tag) {
+    .linux, .macos => ?*const fn (posix.SIG) callconv(.c) void,
+    else => @compileError("unsupported\n"),
+}) void {
+    switch (builtin.os.tag) {
+        .linux, .macos => {
+            const sa: posix.Sigaction = .{
+                .handler = .{ .handler = if (func) |fun| fun else Sig.sigWinCh },
+                .mask = posix.sigemptyset(),
+                .flags = posix.SA.RESTART,
+            };
 
-    posix.sigaction(posix.SIG.WINCH, &sa, null);
+            posix.sigaction(posix.SIG.WINCH, &sa, null);
+        },
+    }
 }
 
 /// NOTE: finish later
@@ -124,7 +133,7 @@ pub fn autoResize() void {
 pub fn getWinSize() void {
     const out_fd = Io.File.stdout().handle;
     switch (builtin.os.tag) {
-        .linux => {
+        .linux, .macos => {
             var size: posix.winsize = .{
                 .col = 0,
                 .row = 0,

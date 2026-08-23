@@ -3,10 +3,13 @@ const std = @import("std");
 const root = @import("root.zig");
 const sig = @import("signal.zig");
 
+pub const RawFlag = enum {
+    CLEANEXIT,
+};
 /// enable raw terminal mode
-pub fn raw() !void {
+pub fn raw(comptime flag: ?RawFlag) !void {
     const sa: std.posix.Sigaction = .{
-        .handler = .{ .handler = sig.sigExit },
+        .handler = .{ .handler = if (flag) |_| sig.sigCleanExit else sig.sigExit },
         .mask = std.posix.sigemptyset(),
         .flags = std.posix.SA.RESTART,
     };
@@ -26,9 +29,9 @@ pub fn raw() !void {
 
     root.termios.current_termios = raw_mode;
 }
-pub fn setClean(io: std.Io) !void {
+pub fn setClean() !void {
     var buf: [1024]u8 = undefined;
-    var writer = std.Io.File.stdout().writer(io, &buf);
+    var writer = std.Io.File.stdout().writer(root.terminal.io, &buf);
     const stdout = &writer.interface;
 
     try stdout.print("\x1B[?1049h\x1B[H", .{});
@@ -39,11 +42,9 @@ pub fn setClean(io: std.Io) !void {
 // without the headache of using the standard stdin writer
 /// will block until any key is pressed
 /// this function will automatically advance therefore please use `.peekByte()`  if you want to check for input
-pub fn waitKeyPress(reader: *std.Io.Reader) !void {
-    const stdin = reader;
-
+pub fn waitKeyPress() void {
     while (true) {
-        _ = stdin.takeByte() catch continue;
+        _ = root.terminal.last_bytes orelse root.getCh() orelse continue;
         break;
     }
 }

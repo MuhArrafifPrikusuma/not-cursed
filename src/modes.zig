@@ -21,11 +21,18 @@ pub fn raw() !void {
     var raw_mode = root.termios.orig_termios;
     raw_mode.lflag.ECHO = false;
     raw_mode.lflag.ICANON = false;
-    raw_mode.lflag.ECHOE = false;
 
     try std.posix.tcsetattr(root.termios.fd, .FLUSH, raw_mode);
 
     root.termios.current_termios = raw_mode;
+}
+pub fn setClean(io: std.Io) !void {
+    var buf: [1024]u8 = undefined;
+    var writer = std.Io.File.stdout().writer(io, &buf);
+    const stdout = &writer.interface;
+
+    try stdout.print("\x1B[?1049h\x1B[H", .{});
+    try stdout.flush();
 }
 
 // NOTE: later make a writer function to easily read and write safely

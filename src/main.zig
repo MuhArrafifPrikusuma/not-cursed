@@ -1,5 +1,6 @@
 const std = @import("std");
 const nc = @import("not_cursed");
+const builtin = @import("builtin");
 
 pub fn main(init: std.process.Init) !void {
     const io = init.io;
@@ -31,10 +32,17 @@ pub fn main(init: std.process.Init) !void {
     root_progress.end();
 
     try nc.Modes.raw();
+    std.debug.print("{d}\n", .{nc.terminal.screen.virt_scr.len});
 
-    nc.mvaddch(0, 0, '@', 7, 0);
+    nc.mvaddch(37, 167, '@', 7, 20);
     try nc.Modes.setClean(io);
     try nc.refresh(io);
+
+    switch (builtin.os.tag) {
+        .macos => return 0,
+        .linux => {},
+        else => @compileError("unsupported"),
+    }
 
     try nc.Cursor.home(io);
     while (true) {

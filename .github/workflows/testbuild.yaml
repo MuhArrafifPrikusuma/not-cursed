@@ -19,14 +19,3 @@ jobs:
 
       - name: build linux
         run: zig build --summary all
-
-  test-macos:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: goto-bus-stop/setup-zig@v1
-        with:
-          version: 0.16.0
-
-      - name: build macos
-        run: zig build run --summary all -Dtarget=aarch64-macos

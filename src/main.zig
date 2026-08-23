@@ -41,7 +41,6 @@ pub fn main(init: std.process.Init) !void {
     try nc.Cursor.home(io);
     while (true) {
         nc.autoResize();
-        if (builtin.os.tag == .macos) break;
 
         const char = try stdin.peekByte();
         nc.Modes.waitKeyPress(stdin) catch continue;

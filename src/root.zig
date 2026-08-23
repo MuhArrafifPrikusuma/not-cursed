@@ -17,17 +17,11 @@ const Cell = struct {
 };
 
 const Cursed = struct {
-    rows: i32,
-    cols: i32,
+    rows: usize,
+    cols: usize,
     virt_scr: []Cell,
     physc_scr: []Cell,
 };
-
-//  NOTE: arena for screen remember to deinit later
-var screen_arena: std.heap.ArenaAllocator = undefined;
-
-// affected by signal
-var window_resized: std.atomic.Value(bool) = .init(false);
 
 pub var termios: struct {
     fd: i32 = undefined,
@@ -38,7 +32,16 @@ pub var termios: struct {
 pub var terminal: struct {
     winsize: posix.winsize = undefined,
     screen: Cursed = undefined,
+    stdin: *std.Io.Reader = undefined,
+    last_bytes: ?u8 = null,
+    io: std.Io = undefined,
 } = .{};
+
+//  NOTE: arena for screen remember to deinit later
+var screen_arena: std.heap.ArenaAllocator = undefined;
+
+// affected by signal
+var window_resized: std.atomic.Value(bool) = .init(false);
 
 /// NOTE: later on use terminal size for this one
 pub fn init() !void {
@@ -50,16 +53,14 @@ pub fn init() !void {
     terminal.screen.rows = terminal.winsize.row;
     terminal.screen.cols = terminal.winsize.col;
 
-    const total_cells: usize = @intCast(terminal.winsize.row * terminal.winsize.col + terminal.winsize.col);
+    const total_cells: usize = terminal.winsize.row * terminal.winsize.col + terminal.winsize.col;
     terminal.screen.virt_scr = try allocator.alloc(Cell, total_cells);
     terminal.screen.physc_scr = try allocator.alloc(Cell, total_cells);
-    std.debug.print("total cell: {d}\n", .{total_cells});
-    std.debug.print("virt size: {d}\nphysical_size: {d}\n", .{ terminal.screen.virt_scr.len, terminal.screen.physc_scr.len });
 
     var i: usize = 0;
     while (i < total_cells) : (i += 1) {
-        terminal.screen.virt_scr[i] = Cell{ .ch = ' ', .fg_color = 7, .bg_color = 0 };
-        terminal.screen.physc_scr[i] = Cell{ .ch = ' ', .fg_color = 7, .bg_color = 0 };
+        terminal.screen.virt_scr[i] = Cell{ .ch = ' ', .fg_color = 7, .bg_color = 20 };
+        terminal.screen.physc_scr[i] = Cell{ .ch = ' ', .fg_color = 7, .bg_color = 20 };
     }
 }
 
@@ -70,9 +71,9 @@ pub fn mvaddch(rows: i32, cols: i32, char: u8, fg: i32, bg: i32) void {
     }
 }
 
-pub fn refresh(io: Io) !void {
+pub fn refresh() !void {
     var buf: [4096]u8 = undefined;
-    var writer = Io.File.stdout().writer(io, &buf);
+    var writer = Io.File.stdout().writer(terminal.io, &buf);
     const stdout = &writer.interface;
 
     var last_fg: i32 = -1;
@@ -82,7 +83,7 @@ pub fn refresh(io: Io) !void {
     while (r < terminal.screen.rows) : (r += 1) {
         var c: usize = 0;
         while (c < terminal.screen.cols) : (c += 1) {
-            const idx: usize = r * @as(usize, @intCast(terminal.screen.cols)) + c;
+            const idx: usize = r * terminal.screen.cols + c;
 
             const virt: Cell = terminal.screen.virt_scr[idx];
             const physc: Cell = terminal.screen.physc_scr[idx];
@@ -109,7 +110,7 @@ pub fn refresh(io: Io) !void {
 /// handle window resizing automatically or pass your own function to handle it
 fn handleResize(func: switch (builtin.os.tag) {
     .linux => ?*const fn (posix.SIG) callconv(.c) void,
-    else => @compileError("unsupported\n"),
+    else => @compileError("not supported\n"),
 }) void {
     switch (builtin.os.tag) {
         .linux => {
@@ -127,6 +128,20 @@ fn handleResize(func: switch (builtin.os.tag) {
 /// NOTE: finish later
 pub fn autoResize() void {
     if (!window_resized.load(.monotonic)) return;
+    //
+    // const old_size: usize = terminal.screen.rows * terminal.screen.cols + terminal.screen.cols;
+    // const new_size: usize = terminal.winsize.row * terminal.winsize.col + terminal.winsize.col;
+    // const diff = old_size - new_size;
+    //
+    // var r: usize = 0;
+    // while (r < terminal.screen.rows) : (r += 1) {
+    //     var c: usize = 0;
+    //     while (c < terminal.screen.cols) : (c += 1) {
+    //         const idx: usize = r * terminal.screen.cols + c;
+    //
+    //
+    //     }
+    // }
 }
 
 /// get current window size
@@ -147,6 +162,7 @@ pub fn getWinSize() void {
                 std.log.err("failed to read terminal size\n", .{});
                 return;
             }
+
             terminal.winsize.col = size.col;
             terminal.winsize.row = size.row;
             terminal.winsize.xpixel = size.xpixel;
@@ -157,4 +173,10 @@ pub fn getWinSize() void {
         },
         else => @compileError("not supported\n"),
     }
+}
+
+/// NOTE: this isn't perfect yet it still need to handle special multi bytes characters
+pub fn getCh() ?u8 {
+    terminal.last_bytes = terminal.stdin.takeByte() catch return null;
+    return terminal.last_bytes;
 }

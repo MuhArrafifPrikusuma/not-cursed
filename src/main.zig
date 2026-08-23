@@ -11,16 +11,29 @@ pub fn main(init: std.process.Init) !void {
         std.log.err("unknown terminall using fallback", .{});
     }
 
-    try nc.init(1024, 720);
+    try nc.init();
     try nc.refresh(io);
     var buf: [1]u8 = undefined;
     var reader = std.Io.File.stdin().reader(io, &buf);
     const stdin = &reader.interface;
 
-    try nc.Modes.raw();
-    std.debug.print("entering raw mode\n", .{});
+    var root_progress = std.Progress.start(io, .{
+        .root_name = "loading idk",
+        .estimated_total_items = 100,
+    });
 
-    nc.mvaddch(100, 50, '@', 7, 0);
+    var i: usize = 0;
+    while (i < 100) : (i += 1) {
+        try std.Io.sleep(io, std.Io.Duration.fromMilliseconds(1), std.Io.Clock.real);
+
+        root_progress.completeOne();
+    }
+    root_progress.end();
+
+    try nc.Modes.raw();
+
+    nc.mvaddch(0, 0, '@', 7, 0);
+    try nc.Modes.setClean(io);
     try nc.refresh(io);
 
     try nc.Cursor.home(io);

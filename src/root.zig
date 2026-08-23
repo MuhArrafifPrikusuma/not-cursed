@@ -4,7 +4,6 @@ const root = @import("root");
 
 pub const Modes = @import("modes.zig");
 pub const Cursor = @import("cursor.zig");
-const Io = std.Io;
 
 const Cell = struct {
     ch: u8,
@@ -20,7 +19,7 @@ const cursed = struct {
 };
 
 pub var screen: cursed = undefined;
-// global arena for screen
+//  NOTE: arena for screen remember to deinit later
 var screen_arena: std.heap.ArenaAllocator = undefined;
 
 pub var termios: struct {
@@ -72,7 +71,8 @@ pub fn refresh(io: std.Io) !void {
             const virt: Cell = screen.virt_scr[idx];
             const physc: Cell = screen.physc_scr[idx];
 
-            if (virt.ch == physc.ch and virt.bg_color == physc.bg_color and virt.fg_color == physc.fg_color) continue;
+            if (virt.ch == physc.ch and virt.bg_color == physc.bg_color and virt.fg_color == physc.fg_color)
+                continue;
 
             try stdout.print("\x1B[{d};{d}H", .{ r + 1, c + 1 });
             if (virt.fg_color != last_fg or virt.bg_color != last_bg) {
@@ -90,7 +90,7 @@ pub fn refresh(io: std.Io) !void {
     try stdout.flush();
 }
 /// Accepting an `Io.Writer` instance is a handy way to write reusable code.
-pub fn printAnotherMessage(writer: *Io.Writer) Io.Writer.Error!void {
+pub fn printAnotherMessage(writer: *std.Io.Writer) std.Io.Writer.Error!void {
     try writer.print("Run `zig build test` to run the tests.\n", .{});
 }
 

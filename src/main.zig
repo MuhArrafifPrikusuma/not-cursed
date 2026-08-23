@@ -39,7 +39,7 @@ pub fn main(init: std.process.Init) !void {
     try nc.refresh(io);
 
     switch (builtin.os.tag) {
-        .macos => return 0,
+        .macos => return,
         .linux => {},
         else => @compileError("unsupported"),
     }

@@ -29,4 +29,4 @@ jobs:
           version: 0.16.0
 
       - name: build macos
-        run: zig build run --summary all
+        run: zig build run --summary all -Dtarget=aarch64-macos

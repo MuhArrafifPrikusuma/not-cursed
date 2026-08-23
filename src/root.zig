@@ -4,6 +4,10 @@ const root = @import("root");
 
 pub const Modes = @import("modes.zig");
 pub const Cursor = @import("cursor.zig");
+pub const Sig = @import("signal.zig");
+
+const posix = std.posix;
+const Io = std.Io;
 
 const Cell = struct {
     ch: u8,
@@ -24,8 +28,8 @@ var screen_arena: std.heap.ArenaAllocator = undefined;
 
 pub var termios: struct {
     fd: i32 = undefined,
-    orig_termios: std.posix.termios = undefined,
-    current_termios: std.posix.termios = undefined,
+    orig_termios: posix.termios = undefined,
+    current_termios: posix.termios = undefined,
 } = .{};
 
 /// NOTE: later on use terminal size for this one
@@ -54,9 +58,9 @@ pub fn mvaddch(rows: i32, cols: i32, char: u8, fg: i32, bg: i32) void {
     }
 }
 
-pub fn refresh(io: std.Io) !void {
+pub fn refresh(io: Io) !void {
     var buf: [4096]u8 = undefined;
-    var writer = std.Io.File.stdout().writer(io, &buf);
+    var writer = Io.File.stdout().writer(io, &buf);
     const stdout = &writer.interface;
 
     var last_fg: i32 = -1;
@@ -89,15 +93,34 @@ pub fn refresh(io: std.Io) !void {
     }
     try stdout.flush();
 }
-/// Accepting an `Io.Writer` instance is a handy way to write reusable code.
-pub fn printAnotherMessage(writer: *std.Io.Writer) std.Io.Writer.Error!void {
-    try writer.print("Run `zig build test` to run the tests.\n", .{});
+
+/// handle window resizing automatically or pass your own function to handle it
+fn handleResize(comptime func: ?*const fn (posix.SIG) callconv(.c) void) void {
+    const sa: posix.Sigaction = .{
+        .handler = .{ .handler = if (func) |fun| fun else Sig.sigWinCh },
+        .mask = posix.sigemptyset(),
+        .flags = posix.SA.RESTART,
+    };
+
+    posix.sigaction(posix.SIG.WINCH, &sa, null);
 }
 
-pub fn add(a: i32, b: i32) i32 {
-    return a + b;
+/// NOTE: finish later
+pub fn autoResize() void {
+    // const winsize = getWinSize();
 }
 
-test "basic add functionality" {
-    try std.testing.expect(add(3, 7) == 10);
+/// get current window size
+pub fn getWinSize() posix.winsize {
+    const out_fd = Io.File.stdout().handle;
+    var size: posix.winsize = undefined;
+
+    const result = posix.system.ioctl(out_fd, posix.T.IOCGWINSZ, @intFromPtr(&size));
+
+    if (result != 0) {
+        std.log.err("failed to read terminal size\n", .{});
+        return;
+    }
+
+    std.debug.print("now size: {any}\n", .{size});
 }

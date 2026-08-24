@@ -8,9 +8,10 @@ pub const RawFlag = enum {
     CLEANEXIT,
 };
 /// enable raw terminal mode
-pub fn raw(comptime flag: ?RawFlag) !void {
+pub fn raw() !void {
+    const stdout = &root.terminal.stdout_wrapper.interface;
     const sa: posix.Sigaction = .{
-        .handler = .{ .handler = if (flag) |_| sig.sigCleanExit else sig.sigExit },
+        .handler = .{ .handler = sig.sigExit },
         .mask = posix.sigemptyset(),
         .flags = posix.SA.RESTART,
     };
@@ -30,6 +31,9 @@ pub fn raw(comptime flag: ?RawFlag) !void {
     raw_mode.cc[@intFromEnum(posix.system.V.MIN)] = 1;
     raw_mode.cc[@intFromEnum(posix.system.V.TIME)] = 0;
 
+    try stdout.writeAll("\x1B[?1049h");
+    try stdout.flush();
+
     try posix.tcsetattr(root.termios.fd, .NOW, raw_mode);
 
     root.termios.current_termios = raw_mode;
@@ -43,18 +47,12 @@ pub fn setClean() !void {
     try stdout.flush();
 }
 
-// NOTE: later make a writer function to easily read and write safely
-// without the headache of using the standard stdin writer
-/// will block until any key is pressed
-/// this function will automatically advance therefore please use `.peekByte()`  if you want to check for input
-pub fn waitKeyPress() !void {
+pub fn waitKeyPress() root.Key {
+    var key: root.Key = undefined;
+    defer root.terminal.last_bytes = null;
     while (true) {
-        _ = root.terminal.last_bytes orelse root.getCh() orelse continue;
+        key = root.terminal.last_bytes orelse root.getCh() orelse continue;
         break;
     }
-}
-
-/// safely exit raw mode and return to original terminal state
-pub fn wellDone() !void {
-    try posix.tcsetattr(root.termios.fd, .FLUSH, root.termios.orig_termios);
+    return key;
 }

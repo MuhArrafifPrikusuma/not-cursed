@@ -6,19 +6,7 @@ const posix = std.posix;
 pub fn sigExit(sig: posix.SIG) callconv(.c) void {
     switch (sig) {
         posix.SIG.TERM, posix.SIG.INT => {
-            root.Modes.wellDone() catch |err| std.log.err("{any}\n", .{err});
-            std.process.exit(1);
-        },
-        else => {
-            std.log.err("unhandled signal {any}\n", .{sig});
-        },
-    }
-}
-pub fn sigCleanExit(sig: posix.SIG) callconv(.c) void {
-    switch (sig) {
-        posix.SIG.TERM, posix.SIG.INT => {
-            root.Modes.wellDone() catch |err| std.log.err("{any}\n", .{err});
-            root.Modes.setClean() catch |err| std.log.err("{any}\n", .{err});
+            root.wellDone() catch |err| std.log.err("{any}\n", .{err});
             std.process.exit(1);
         },
         else => {

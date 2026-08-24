@@ -17,6 +17,7 @@ pub fn mv(rows: i32, cols: i32) void {
     getCursor();
 }
 
+// NOTE: unfinished
 pub fn getCursor() void {
     const stdin = &root.terminal.reader;
     const stdout = &root.terminal.writer;

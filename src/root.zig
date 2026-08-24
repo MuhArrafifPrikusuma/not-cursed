@@ -58,8 +58,13 @@ pub var terminal: struct {
     bufout: [1024]u8 = undefined,
 
     io: std.Io = undefined,
-    writer: std.Io.Writer = undefined,
-    reader: std.Io.Reader = undefined,
+    stdout_wrapper: std.Io.File.Writer = undefined,
+    stdin_wrapper: std.Io.File.Reader = undefined,
+
+    pub fn init(self: *@This(), io: std.Io) void {
+        self.stdout_wrapper = std.Io.File.stdout().writerStreaming(io, &self.bufout);
+        self.stdin_wrapper = std.Io.File.stdin().readerStreaming(io, &self.bufin);
+    }
 } = .{};
 
 //  NOTE: arena for screen remember to deinit later
@@ -76,8 +81,7 @@ pub fn init(io: std.Io) !void {
     const allocator = std.heap.smp_allocator;
     screen_arena = .init(allocator);
 
-    terminal.writer = std.Io.File.stdout().writer(terminal.io, &terminal.bufout).interface;
-    terminal.reader = std.Io.File.stdin().reader(terminal.io, &terminal.bufin).interface;
+    terminal.init(io);
 
     terminal.screen.rows = terminal.winsize.row;
     terminal.screen.cols = terminal.winsize.col;
@@ -240,4 +244,13 @@ fn parseKey(seq: []const u8) !Key {
     }
     if (seq.len == 1) return .{ .char = seq[0] };
     return KeyError.UnknownKey;
+}
+
+/// safely exit raw mode and return to original terminal state
+pub fn wellDone() !void {
+    defer screen_arena.deinit();
+    try posix.tcsetattr(termios.fd, .FLUSH, termios.orig_termios);
+    const stdout = &terminal.stdout_wrapper.interface;
+    try stdout.writeAll("\x1B[?1049l");
+    try stdout.flush();
 }

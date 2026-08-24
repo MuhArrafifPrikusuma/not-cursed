@@ -10,10 +10,29 @@ pub const Sig = @import("signal.zig");
 const posix = std.posix;
 const Io = std.Io;
 
+pub const Key = union(enum) {
+    up,
+    down,
+    right,
+    left,
+    char: u8,
+    escape,
+    // NOTE: replace etc with all the other special key later
+    etc,
+    unknown,
+};
+
+// structs
 const Cell = struct {
     ch: u8,
     fg_color: i32,
     bg_color: i32,
+};
+
+const Curs = struct {
+    rows: usize,
+    cols: usize,
+    // add cursor configuration later, (like invisible blinking etc)
 };
 
 const Cursed = struct {
@@ -32,9 +51,16 @@ pub var termios: struct {
 pub var terminal: struct {
     winsize: posix.winsize = undefined,
     screen: Cursed = undefined,
-    stdin: *std.Io.Reader = undefined,
-    last_bytes: ?u8 = null,
+
+    cursor: Curs = Curs{ .rows = 0, .cols = 0 },
+    last_bytes: ?Key = null,
+
+    bufin: [1024]u8 = undefined,
+    bufout: [1024]u8 = undefined,
+
     io: std.Io = undefined,
+    stdin: *std.Io.Reader = undefined,
+    stdout: *std.Io.Writer = undefined,
 } = .{};
 
 //  NOTE: arena for screen remember to deinit later
@@ -44,11 +70,18 @@ var screen_arena: std.heap.ArenaAllocator = undefined;
 var window_resized: std.atomic.Value(bool) = .init(false);
 
 /// NOTE: later on use terminal size for this one
-pub fn init() !void {
+pub fn init(io: std.Io) !void {
+    terminal.io = io;
     getWinSize();
 
     const allocator = std.heap.smp_allocator;
     screen_arena = .init(allocator);
+
+    var reader = std.Io.File.stdin().reader(terminal.io, &terminal.bufin);
+    terminal.stdin = &reader.interface;
+
+    var writer = std.Io.File.stdout().writer(terminal.io, &terminal.bufout);
+    terminal.stdout = &writer.interface;
 
     terminal.screen.rows = terminal.winsize.row;
     terminal.screen.cols = terminal.winsize.col;
@@ -176,7 +209,29 @@ pub fn getWinSize() void {
 }
 
 /// NOTE: this isn't perfect yet it still need to handle special multi bytes characters
-pub fn getCh() ?u8 {
-    terminal.last_bytes = terminal.stdin.takeByte() catch return null;
-    return terminal.last_bytes;
+pub fn getCh() ?Key {
+    const bytes_read = posix.read(termios.fd, &terminal.bufin);
+    if (bytes_read == 0) return null;
+
+    const key = parseKey(terminal.bufin[0..bytes_read]);
+    return key;
+}
+
+fn parseKey(seq: []const u8) Key {
+    if (seq.len == 0) return .unknown;
+
+    if (seq[0] == 0x1B) {
+        if (seq.len == 1) return .escape;
+
+        if (seq.len >= 3 and seq[1] == '[') {
+            return switch (seq[2]) {
+                'A' => .up,
+                'B' => .down,
+                'C' => .right,
+                'D' => .left,
+                else => .unknown,
+            };
+        }
+    }
+    if (seq.len == 1) return .{ .char = seq[0] };
 }

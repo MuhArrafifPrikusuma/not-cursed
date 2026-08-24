@@ -3,7 +3,7 @@ const nc = @import("not_cursed");
 const builtin = @import("builtin");
 
 pub fn main(init: std.process.Init) !void {
-    nc.terminal.io = init.io;
+    const quit: nc.Key = .{ .char = 'q' };
 
     // NOTE: later on take this and use it to determine what configuration it should be using
     if (init.environ_map.get("TERM")) |term| {
@@ -12,11 +12,16 @@ pub fn main(init: std.process.Init) !void {
         std.log.err("unknown terminall using fallback", .{});
     }
 
-    try nc.init();
+    try nc.init(init.io);
     try nc.refresh();
-    var buf: [1]u8 = undefined;
-    var reader = std.Io.File.stdin().reader(nc.terminal.io, &buf);
+
+    var bufin: [1]u8 = undefined;
+    var reader = std.Io.File.stdin().reader(nc.terminal.io, &bufin);
     nc.terminal.stdin = &reader.interface;
+
+    var bufout: [256]u8 = undefined;
+    var writer = std.Io.File.stdin().writer(nc.terminal.io, &bufout);
+    nc.terminal.stdout = &writer.interface;
 
     var root_progress = std.Progress.start(nc.terminal.io, .{
         .root_name = "loading idk",
@@ -43,11 +48,12 @@ pub fn main(init: std.process.Init) !void {
         nc.autoResize();
 
         const char = nc.getCh() orelse continue;
+        std.debug.print("{c}\n", .{char});
         nc.Modes.waitKeyPress();
 
-        std.debug.print("{c}", .{char});
-        if (char == 'q') {
-            try nc.Modes.wellDone();
+        try nc.refresh();
+        if (char == quit) {
+            try nc.Mods.wellDone();
             break;
         }
     }

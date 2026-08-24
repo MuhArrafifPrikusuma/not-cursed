@@ -3,29 +3,34 @@ const std = @import("std");
 const root = @import("root.zig");
 const sig = @import("signal.zig");
 
+const posix = std.posix;
 pub const RawFlag = enum {
     CLEANEXIT,
 };
 /// enable raw terminal mode
 pub fn raw(comptime flag: ?RawFlag) !void {
-    const sa: std.posix.Sigaction = .{
+    const sa: posix.Sigaction = .{
         .handler = .{ .handler = if (flag) |_| sig.sigCleanExit else sig.sigExit },
-        .mask = std.posix.sigemptyset(),
-        .flags = std.posix.SA.RESTART,
+        .mask = posix.sigemptyset(),
+        .flags = posix.SA.RESTART,
     };
 
-    std.posix.sigaction(std.posix.SIG.TERM, &sa, null);
-    std.posix.sigaction(std.posix.SIG.INT, &sa, null);
+    posix.sigaction(posix.SIG.TERM, &sa, null);
+    posix.sigaction(posix.SIG.INT, &sa, null);
 
     root.termios.fd = std.Io.File.stdin().handle;
 
-    root.termios.orig_termios = try std.posix.tcgetattr(root.termios.fd);
+    root.termios.orig_termios = try posix.tcgetattr(root.termios.fd);
 
     var raw_mode = root.termios.orig_termios;
     raw_mode.lflag.ECHO = false;
     raw_mode.lflag.ICANON = false;
 
-    try std.posix.tcsetattr(root.termios.fd, .FLUSH, raw_mode);
+    // read instant timeout after 1 bytes
+    raw_mode.cc[@intFromEnum(posix.system.V.MIN)] = 1;
+    raw_mode.cc[@intFromEnum(posix.system.V.TIME)] = 0;
+
+    try posix.tcsetattr(root.termios.fd, .NOW, raw_mode);
 
     root.termios.current_termios = raw_mode;
 }
@@ -51,5 +56,5 @@ pub fn waitKeyPress() void {
 
 /// safely exit raw mode and return to original terminal state
 pub fn wellDone() !void {
-    try std.posix.tcsetattr(root.termios.fd, .FLUSH, root.termios.orig_termios);
+    try posix.tcsetattr(root.termios.fd, .FLUSH, root.termios.orig_termios);
 }

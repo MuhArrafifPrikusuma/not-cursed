@@ -3,7 +3,6 @@ const nc = @import("not_cursed");
 const builtin = @import("builtin");
 
 pub fn main(init: std.process.Init) !void {
-    const quit: nc.Key = .{ .char = 'q' };
 
     // NOTE: later on take this and use it to determine what configuration it should be using
     if (init.environ_map.get("TERM")) |term| {
@@ -47,14 +46,20 @@ pub fn main(init: std.process.Init) !void {
     while (true) {
         nc.autoResize();
 
-        const char = nc.getCh() orelse continue;
-        std.debug.print("{c}\n", .{char});
+        /// FIX: waitKeyPress is broken again
+        const key = nc.getCh() orelse continue;
         nc.Modes.waitKeyPress();
 
         try nc.refresh();
-        if (char == quit) {
-            try nc.Mods.wellDone();
-            break;
+        switch (key) {
+            .char => |char| {
+                if (char == 'q') {
+                    try nc.Modes.wellDone();
+                    break;
+                }
+                std.debug.print("{c}\n", .{char});
+            },
+            else => continue,
         }
     }
 }

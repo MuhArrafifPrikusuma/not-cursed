@@ -210,8 +210,11 @@ pub fn getWinSize() void {
 
 /// NOTE: this isn't perfect yet it still need to handle special multi bytes characters
 pub fn getCh() ?Key {
-    const bytes_read = posix.read(termios.fd, &terminal.bufin);
-    if (bytes_read == 0) return null;
+    const bytes_read = posix.read(termios.fd, &terminal.bufin) catch |err| {
+        std.log.err("{any}\n", .{err});
+        return null;
+    };
+    // if (bytes_read == 0) return null;
 
     const key = parseKey(terminal.bufin[0..bytes_read]);
     return key;
@@ -234,4 +237,5 @@ fn parseKey(seq: []const u8) Key {
         }
     }
     if (seq.len == 1) return .{ .char = seq[0] };
+    return .unknown;
 }

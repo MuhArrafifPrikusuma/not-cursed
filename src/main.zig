@@ -15,14 +15,6 @@ pub fn main(init: std.process.Init) !void {
     try nc.init(init.io);
     try nc.refresh();
 
-    var bufin: [1]u8 = undefined;
-    var reader = std.Io.File.stdin().reader(nc.terminal.io, &bufin);
-    nc.terminal.stdin = &reader.interface;
-
-    var bufout: [256]u8 = undefined;
-    var writer = std.Io.File.stdin().writer(nc.terminal.io, &bufout);
-    nc.terminal.stdout = &writer.interface;
-
     var root_progress = std.Progress.start(nc.terminal.io, .{
         .root_name = "loading idk",
         .estimated_total_items = 100,
@@ -49,7 +41,7 @@ pub fn main(init: std.process.Init) !void {
 
         // FIXME: waitKeyPress is broken again
         const key = nc.getCh() orelse continue;
-        nc.Modes.waitKeyPress();
+        nc.Modes.waitKeyPress() catch continue;
 
         try nc.refresh();
         switch (key) {

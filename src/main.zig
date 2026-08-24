@@ -28,7 +28,7 @@ pub fn main(init: std.process.Init) !void {
     }
     root_progress.end();
 
-    try nc.Modes.raw(nc.Modes.RawFlag.CLEANEXIT);
+    try nc.Modes.raw();
     std.debug.print("{d}\n", .{nc.terminal.screen.virt_scr.len});
 
     nc.mvaddch(37, 167, '@', 7, 20);
@@ -39,15 +39,13 @@ pub fn main(init: std.process.Init) !void {
     while (true) {
         nc.autoResize();
 
-        // FIXME: waitKeyPress is broken again
-        const key = nc.getCh() orelse continue;
-        nc.Modes.waitKeyPress() catch continue;
+        const key = nc.Modes.waitKeyPress();
 
         try nc.refresh();
         switch (key) {
             .char => |char| {
                 if (char == 'q') {
-                    try nc.Modes.wellDone();
+                    try nc.wellDone();
                     break;
                 }
                 std.debug.print("{c}\n", .{char});

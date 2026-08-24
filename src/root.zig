@@ -61,6 +61,9 @@ pub var terminal: struct {
     io: std.Io = undefined,
     stdin: *std.Io.Reader = undefined,
     stdout: *std.Io.Writer = undefined,
+    stdin: *std.Io.Reader = undefined,
+    last_bytes: ?u8 = null,
+    io: std.Io = undefined,
 } = .{};
 
 //  NOTE: arena for screen remember to deinit later
@@ -238,4 +241,7 @@ fn parseKey(seq: []const u8) Key {
     }
     if (seq.len == 1) return .{ .char = seq[0] };
     return .unknown;
+pub fn getCh() ?u8 {
+    terminal.last_bytes = terminal.stdin.takeByte() catch return null;
+    return terminal.last_bytes;
 }

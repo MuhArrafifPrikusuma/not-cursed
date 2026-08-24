@@ -3,6 +3,7 @@ const nc = @import("not_cursed");
 const builtin = @import("builtin");
 
 pub fn main(init: std.process.Init) !void {
+    nc.terminal.io = init.io;
 
     // NOTE: later on take this and use it to determine what configuration it should be using
     if (init.environ_map.get("TERM")) |term| {
@@ -21,6 +22,12 @@ pub fn main(init: std.process.Init) !void {
     var bufout: [256]u8 = undefined;
     var writer = std.Io.File.stdin().writer(nc.terminal.io, &bufout);
     nc.terminal.stdout = &writer.interface;
+
+    try nc.init();
+    try nc.refresh();
+    var buf: [1]u8 = undefined;
+    var reader = std.Io.File.stdin().reader(nc.terminal.io, &buf);
+    nc.terminal.stdin = &reader.interface;
 
     var root_progress = std.Progress.start(nc.terminal.io, .{
         .root_name = "loading idk",
@@ -48,6 +55,7 @@ pub fn main(init: std.process.Init) !void {
 
         /// FIX: waitKeyPress is broken again
         const key = nc.getCh() orelse continue;
+        const char = nc.getCh() orelse continue;
         nc.Modes.waitKeyPress();
 
         try nc.refresh();

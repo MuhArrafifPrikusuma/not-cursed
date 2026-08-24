@@ -13,6 +13,10 @@ pub fn raw(comptime flag: ?RawFlag) !void {
         .handler = .{ .handler = if (flag) |_| sig.sigCleanExit else sig.sigExit },
         .mask = posix.sigemptyset(),
         .flags = posix.SA.RESTART,
+    const sa: std.posix.Sigaction = .{
+        .handler = .{ .handler = if (flag) |_| sig.sigCleanExit else sig.sigExit },
+        .mask = std.posix.sigemptyset(),
+        .flags = std.posix.SA.RESTART,
     };
 
     posix.sigaction(posix.SIG.TERM, &sa, null);

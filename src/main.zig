@@ -3,6 +3,10 @@ const nc = @import("not_cursed");
 const builtin = @import("builtin");
 
 pub fn main(init: std.process.Init) !void {
+<<<<<<< HEAD
+=======
+    nc.terminal.io = init.io;
+>>>>>>> 30189826588f31622b763efe18561568835d59f9
 
     // NOTE: later on take this and use it to determine what configuration it should be using
     if (init.environ_map.get("TERM")) |term| {
@@ -11,6 +15,7 @@ pub fn main(init: std.process.Init) !void {
         std.log.err("unknown terminall using fallback", .{});
     }
 
+<<<<<<< HEAD
     try nc.init(init.io);
     try nc.refresh();
 

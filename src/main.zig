@@ -12,11 +12,16 @@ pub fn main(init: std.process.Init) !void {
         std.log.err("unknown terminall using fallback", .{});
     }
 
-    try nc.init();
+    try nc.init(init.io);
     try nc.refresh();
-    var buf: [1]u8 = undefined;
-    var reader = std.Io.File.stdin().reader(nc.terminal.io, &buf);
+
+    var bufin: [1]u8 = undefined;
+    var reader = std.Io.File.stdin().reader(nc.terminal.io, &bufin);
     nc.terminal.stdin = &reader.interface;
+
+    var bufout: [256]u8 = undefined;
+    var writer = std.Io.File.stdin().writer(nc.terminal.io, &bufout);
+    nc.terminal.stdout = &writer.interface;
 
     var root_progress = std.Progress.start(nc.terminal.io, .{
         .root_name = "loading idk",
@@ -42,13 +47,20 @@ pub fn main(init: std.process.Init) !void {
     while (true) {
         nc.autoResize();
 
-        const char = nc.getCh() orelse continue;
+        // FIXME: waitKeyPress is broken again
+        const key = nc.getCh() orelse continue;
         nc.Modes.waitKeyPress();
 
-        std.debug.print("{c}", .{char});
-        if (char == 'q') {
-            try nc.Modes.wellDone();
-            break;
+        try nc.refresh();
+        switch (key) {
+            .char => |char| {
+                if (char == 'q') {
+                    try nc.Modes.wellDone();
+                    break;
+                }
+                std.debug.print("{c}\n", .{char});
+            },
+            else => continue,
         }
     }
 }

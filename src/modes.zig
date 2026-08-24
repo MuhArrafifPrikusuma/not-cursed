@@ -47,7 +47,7 @@ pub fn setClean() !void {
 // without the headache of using the standard stdin writer
 /// will block until any key is pressed
 /// this function will automatically advance therefore please use `.peekByte()`  if you want to check for input
-pub fn waitKeyPress() void {
+pub fn waitKeyPress() !void {
     while (true) {
         _ = root.terminal.last_bytes orelse root.getCh() orelse continue;
         break;

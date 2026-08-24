@@ -19,7 +19,6 @@ pub const Key = union(enum) {
     escape,
     // NOTE: replace etc with all the other special key later
     etc,
-    unknown,
 };
 
 // structs
@@ -59,8 +58,8 @@ pub var terminal: struct {
     bufout: [1024]u8 = undefined,
 
     io: std.Io = undefined,
-    stdin: *std.Io.Reader = undefined,
-    stdout: *std.Io.Writer = undefined,
+    writer: std.Io.Writer = undefined,
+    reader: std.Io.Reader = undefined,
 } = .{};
 
 //  NOTE: arena for screen remember to deinit later
@@ -77,11 +76,8 @@ pub fn init(io: std.Io) !void {
     const allocator = std.heap.smp_allocator;
     screen_arena = .init(allocator);
 
-    var reader = std.Io.File.stdin().reader(terminal.io, &terminal.bufin);
-    terminal.stdin = &reader.interface;
-
-    var writer = std.Io.File.stdout().writer(terminal.io, &terminal.bufout);
-    terminal.stdout = &writer.interface;
+    terminal.writer = std.Io.File.stdout().writer(terminal.io, &terminal.bufout).interface;
+    terminal.reader = std.Io.File.stdin().reader(terminal.io, &terminal.bufin).interface;
 
     terminal.screen.rows = terminal.winsize.row;
     terminal.screen.cols = terminal.winsize.col;
@@ -208,20 +204,26 @@ pub fn getWinSize() void {
     }
 }
 
+const KeyError = error{
+    UnknownKey,
+};
+
 /// NOTE: this isn't perfect yet it still need to handle special multi bytes characters
 pub fn getCh() ?Key {
+    terminal.last_bytes = null;
     const bytes_read = posix.read(termios.fd, &terminal.bufin) catch |err| {
         std.log.err("{any}\n", .{err});
         return null;
     };
-    // if (bytes_read == 0) return null;
+    if (bytes_read == 0) return null;
 
-    const key = parseKey(terminal.bufin[0..bytes_read]);
+    const key = parseKey(terminal.bufin[0..bytes_read]) catch return null;
+    terminal.last_bytes = key;
     return key;
 }
 
-fn parseKey(seq: []const u8) Key {
-    if (seq.len == 0) return .unknown;
+fn parseKey(seq: []const u8) !Key {
+    if (seq.len == 0) return KeyError.UnknownKey;
 
     if (seq[0] == 0x1B) {
         if (seq.len == 1) return .escape;
@@ -232,10 +234,10 @@ fn parseKey(seq: []const u8) Key {
                 'B' => .down,
                 'C' => .right,
                 'D' => .left,
-                else => .unknown,
+                else => KeyError.UnknownKey,
             };
         }
     }
     if (seq.len == 1) return .{ .char = seq[0] };
-    return .unknown;
+    return KeyError.UnknownKey;
 }

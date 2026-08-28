@@ -12,7 +12,7 @@ pub fn main(init: std.process.Init) !void {
         std.log.err("unknown terminall using fallback", .{});
     }
 
-    try nc.init(init.io);
+    try nc.init(init.environ_map, init.io);
     try nc.refresh();
 
     var root_progress = std.Progress.start(nc.terminal.io, .{

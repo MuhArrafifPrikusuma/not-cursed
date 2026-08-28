@@ -6,9 +6,18 @@ const builtin = @import("builtin");
 pub const Modes = @import("modes.zig");
 pub const Cursor = @import("cursor.zig");
 pub const Sig = @import("signal.zig");
+const Colors = @import("Color.zig");
 
 const posix = std.posix;
 const Io = std.Io;
+
+// expose
+
+pub var color: struct {
+    resetColor: @TypeOf(Colors.resetColor()) = Colors.resetColor(),
+    setColor: @TypeOf(Colors.setColor) = undefined,
+    Color: Colors.Color = .{},
+} = .{};
 
 pub const Key = union(enum) {
     up,
@@ -21,12 +30,12 @@ pub const Key = union(enum) {
     etc,
 };
 
-// structs
-const Cell = struct {
-    ch: u8,
-    fg_color: i32,
-    bg_color: i32,
-};
+// // structs
+// const Cell = struct {
+//     ch: u8,
+//     fg_color: i32,
+//     bg_color: i32,
+// };
 
 const Curs = struct {
     rows: usize,
@@ -37,8 +46,8 @@ const Curs = struct {
 const Cursed = struct {
     rows: usize,
     cols: usize,
-    virt_scr: []Cell,
-    physc_scr: []Cell,
+    virt_scr: []u8,
+    physc_scr: []u8,
 };
 
 pub var termios: struct {
@@ -53,6 +62,8 @@ pub var terminal: struct {
 
     cursor: Curs = Curs{ .rows = 0, .cols = 0 },
     last_bytes: ?Key = null,
+
+    support_true_color: bool = false,
 
     bufin: [1024]u8 = undefined,
     bufout: [1024]u8 = undefined,
@@ -74,12 +85,17 @@ var screen_arena: std.heap.ArenaAllocator = undefined;
 var window_resized: std.atomic.Value(bool) = .init(false);
 
 /// NOTE: later on use terminal size for this one
-pub fn init(io: std.Io) !void {
+pub fn init(env: *std.process.Environ.Map, io: std.Io) !void {
     terminal.io = io;
     getWinSize();
 
     const allocator = std.heap.smp_allocator;
     screen_arena = .init(allocator);
+    getTermColorSupport(env);
+
+    if (terminal.support_true_color) {
+        color.setColor = Colors.setColorRGB;
+    }
 
     terminal.init(io);
 
@@ -87,30 +103,39 @@ pub fn init(io: std.Io) !void {
     terminal.screen.cols = terminal.winsize.col;
 
     const total_cells: usize = terminal.winsize.row * terminal.winsize.col + terminal.winsize.col;
-    terminal.screen.virt_scr = try allocator.alloc(Cell, total_cells);
-    terminal.screen.physc_scr = try allocator.alloc(Cell, total_cells);
+    terminal.screen.virt_scr = try allocator.alloc(u8, total_cells);
+    terminal.screen.physc_scr = try allocator.alloc(u8, total_cells);
 
     var i: usize = 0;
     while (i < total_cells) : (i += 1) {
-        terminal.screen.virt_scr[i] = Cell{ .ch = ' ', .fg_color = 7, .bg_color = 20 };
-        terminal.screen.physc_scr[i] = Cell{ .ch = ' ', .fg_color = 7, .bg_color = 20 };
+        terminal.screen.virt_scr[i] = ' ';
+        terminal.screen.physc_scr[i] = ' ';
     }
 }
 
-pub fn mvaddch(rows: i32, cols: i32, char: u8, fg: i32, bg: i32) void {
-    if (rows >= 0 and rows <= terminal.screen.rows and cols >= 0 and cols <= terminal.screen.cols) {
-        const idx: usize = @as(usize, @intCast(rows * terminal.winsize.col + cols));
-        terminal.screen.virt_scr[idx] = Cell{ .ch = char, .fg_color = fg, .bg_color = bg };
+fn getTermColorSupport(env: *std.process.Environ.Map) void {
+    if (env.get("COLORTERM")) |support| {
+        if (std.ascii.eqlIgnoreCase(support, "truecolor"))
+            terminal.support_true_color = true;
     }
 }
+
+// Expose functions
+pub const mvaddch: *const fn (rows: i32, cols: i32, char: u8, fg: i32, bg: i32) void = mvaddch8;
+
+fn mvaddch8(rows: i32, cols: i32, char: u8) void {
+    if (rows >= 0 and rows <= terminal.screen.rows and cols >= 0 and cols <= terminal.screen.cols) {
+        const idx: usize = @as(usize, @intCast(rows * terminal.winsize.col + cols));
+        terminal.screen.virt_scr[idx] = char;
+    }
+}
+
+fn mvaddchRGB() !void {}
 
 pub fn refresh() !void {
     var buf: [4096]u8 = undefined;
     var writer = Io.File.stdout().writer(terminal.io, &buf);
     const stdout = &writer.interface;
-
-    var last_fg: i32 = -1;
-    var last_bg: i32 = -1;
 
     var r: usize = 0;
     while (r < terminal.screen.rows) : (r += 1) {
@@ -118,19 +143,13 @@ pub fn refresh() !void {
         while (c < terminal.screen.cols) : (c += 1) {
             const idx: usize = r * terminal.screen.cols + c;
 
-            const virt: Cell = terminal.screen.virt_scr[idx];
-            const physc: Cell = terminal.screen.physc_scr[idx];
+            const virt: u8 = terminal.screen.virt_scr[idx];
+            const physc: u8 = terminal.screen.physc_scr[idx];
 
-            if (virt.ch == physc.ch and virt.bg_color == physc.bg_color and virt.fg_color == physc.fg_color)
+            if (virt == physc)
                 continue;
 
             try stdout.print("\x1B[{d};{d}H", .{ r + 1, c + 1 });
-            if (virt.fg_color != last_fg or virt.bg_color != last_bg) {
-                // 5 is color format change it later to automatically fit user terminal
-                try stdout.print("\x1B[38;5;{d}m\x1B[48;5;{d}m", .{ virt.fg_color, virt.bg_color });
-                last_fg = virt.fg_color;
-                last_bg = virt.bg_color;
-            }
 
             try stdout.print("{c}", .{virt.ch});
             try stdout.print("\x1B[0m", .{});
